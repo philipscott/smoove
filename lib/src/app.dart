@@ -2,6 +2,7 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:smoove/src/pages/puzzle.dart';
 import 'package:smoove/src/pages/selector.dart';
@@ -32,6 +33,7 @@ class MyApp extends StatelessWidget {
     //
     // The AnimatedBuilder Widget listens to the SettingsController for changes.
     // Whenever the user updates their settings, the MaterialApp is rebuilt.
+    FlutterNativeSplash.remove();
     return AnimatedBuilder(
       animation: settingsController,
       builder: (BuildContext context, Widget? child) {
