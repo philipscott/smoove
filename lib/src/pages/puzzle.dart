@@ -3,6 +3,7 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:smoove/src/models/slice.dart';
 import 'package:smoove/src/widgets/app_drawer.dart';
 import 'package:smoove/src/widgets/circle_panel.dart';
@@ -47,9 +48,25 @@ class _PuzzlePageState extends State<PuzzlePage> with TickerProviderStateMixin {
   Timer? t;
   DateTime start = DateTime.now();
   DateTime pausedAt = DateTime.now();
+  late SharedPreferences prefs;
+
+  Future<void> getSavedState() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedLevel = prefs.getInt("level") ?? 0;
+    if (savedLevel > 0) {
+      setState(() {
+        level = savedLevel;
+      });
+    }
+  }
+
+  void saveProgress() {
+    prefs.setInt("level", level);
+  }
 
   @override
   void initState() {
+    getSavedState();
     controller = AnimationController(
         vsync: this, duration: const Duration(milliseconds: 250));
     controller!.addListener(() {
@@ -332,126 +349,136 @@ class _PuzzlePageState extends State<PuzzlePage> with TickerProviderStateMixin {
     });
 
     scramble();
+    saveProgress();
   }
 
   void getSliceFromPosition(Offset pos, Size size, int slots) {
-    final x = pos.dx - size.width / 2;
-    final y = pos.dy - size.height / 2;
-    final r = sqrt(x * x + y * y);
-    final halfstep = (2 * pi / slots) / 2;
-    double a = x == 0 ? pi / 2 : atan(y / x);
-    //final steps = (a.abs() / halfstep).floor();
-    //print("r:$r x:$x y:$y");
-    final band = (r / width).floor();
-    Slice? sel;
-    //print("band: $band");
-    final List<XY> adjacents = [];
-    //print("atan: ${atan(y / x)}");
-    int slot = 0;
-    if (band != 0) {
-      // calculate quadrant, then the angle from 0 and then add the starting slot offset ... then divide by number of slots
-      //print("Pre-Angle $a");
-      if (x > 0) {
-        if (y < 0) {
-          a = 2 * pi + a;
+    print("getSlice");
+    try {
+      final x = pos.dx - size.width / 2;
+      final y = pos.dy - size.height / 2;
+      final r = sqrt(x * x + y * y);
+      final halfstep = (2 * pi / slots) / 2;
+      double a = x == 0 ? pi / 2 : atan(y / x);
+      //final steps = (a.abs() / halfstep).floor();
+      //print("r:$r x:$x y:$y");
+      final band = (r / width).floor();
+
+      Slice? sel;
+      //print("band: $band");
+      final List<XY> adjacents = [];
+      //print("atan: ${atan(y / x)}");
+      int slot = 0;
+      if (band != 0) {
+        // calculate quadrant, then the angle from 0 and then add the starting slot offset ... then divide by number of slots
+        //print("Pre-Angle $a");
+        if (x > 0) {
+          if (y < 0) {
+            a = 2 * pi + a;
+          }
+        } else {
+          a = pi + a;
         }
-      } else {
-        a = pi + a;
-      }
 
-      final sweep = pi * 2 / slots;
-      //final startangle = (slot * sweep) - sweep / 2;
+        final sweep = pi * 2 / slots;
+        //final startangle = (slot * sweep) - sweep / 2;
 
-      //print("Angle $a");
+        //print("Angle $a");
 
-      a += sweep / 2;
-      slot = (a / sweep).floor();
-      if (slot >= slots) slot = 0;
+        a += sweep / 2;
+        slot = (a / sweep).floor();
+        if (slot >= slots) slot = 0;
 
-      //print("band: $band slot: $slot");
+        //print("band: $band slot: $slot");
 
-      // get slots at
-      final sl =
-          slices.where((s) => s.posband == band && s.posslot == slot).toList();
-      //print("Matching slots: ${sl.length}");
-      //if (sl.length > 0) {
-      //  print(
-      //      "Slice: ${sl[0].band} ${sl[0].slot} ${sl[0].posband} ${sl[0].posslot} ${sl[0].selected}");
-      //}
+        // get slots at
+        final sl = slices
+            .where((s) => s.posband == band && s.posslot == slot)
+            .toList();
+        //print("Matching slots: ${sl.length}");
+        //if (sl.length > 0) {
+        //  print(
+        //      "Slice: ${sl[0].band} ${sl[0].slot} ${sl[0].posband} ${sl[0].posslot} ${sl[0].selected}");
+        //}
 
-      for (var s in slices) {
-        s.selected = s.posband == band && s.posslot == slot;
-        //print(
-        //    "SliceX: ${s.band} ${s.slot} ${s.posband} ${s.posslot} ${s.selected}");
-      }
-      final ss = slices.where((s) => s.selected).toList();
-      //print("Selected slots: ${ss.length}");
-      if (ss.length > 0) {
-        sel = ss[0];
-        //print(
-        //    "Slice: ${ss[0].band} ${ss[0].slot} ${ss[0].posband} ${ss[0].posslot} ${ss[0].selected}");
-        // get adjacent slots
-        adjacents.add(slot == 0 ? XY(band, slots - 1) : XY(band, slot - 1));
-        adjacents.add(slot == slots - 1 ? XY(band, 0) : XY(band, slot + 1));
-        /*
+        for (var s in slices) {
+          s.selected = s.posband == band && s.posslot == slot;
+          //print(
+          //    "SliceX: ${s.band} ${s.slot} ${s.posband} ${s.posslot} ${s.selected}");
+        }
+        final ss = slices.where((s) => s.selected).toList();
+        //print("Selected slots: ${ss.length}");
+        if (ss.length > 0) {
+          sel = ss[0];
+          //print(
+          //    "Slice: ${ss[0].band} ${ss[0].slot} ${ss[0].posband} ${ss[0].posslot} ${ss[0].selected}");
+          // get adjacent slots
+          adjacents.add(slot == 0 ? XY(band, slots - 1) : XY(band, slot - 1));
+          adjacents.add(slot == slots - 1 ? XY(band, 0) : XY(band, slot + 1));
+          /*
         if (band == 1) {
           adjacents.addAll(List<XY>.generate(slots, (index) => XY(0, index)));
         } else {
           adjacents.add(XY(band - 1, slot));
         }
         */
-        adjacents.add(band == 1 ? XY(0, 0) : XY(band - 1, slot));
-        if (band < bands) adjacents.add(XY(band + 1, slot));
+          adjacents.add(band == 1 ? XY(0, 0) : XY(band - 1, slot));
+          if (band < bands) adjacents.add(XY(band + 1, slot));
+        } else {
+          //print("Nothing selected");
+        }
       } else {
-        //print("Nothing selected");
+        // all of band 1 is adjacent!
+        for (var s in slices) {
+          s.selected = s.posband == 0 && s.posslot == 0;
+          //print(
+          //    "SliceX: ${s.band} ${s.slot} ${s.posband} ${s.posslot} ${s.selected}");
+        }
+        final ss = slices.where((s) => s.selected).toList();
+        if (ss.length > 0) {
+          sel = ss[0];
+        }
+        adjacents.addAll(List<XY>.generate(slots, (index) => XY(1, index)));
       }
-    } else {
-      // all of band 1 is adjacent!
-      for (var s in slices) {
-        s.selected = s.posband == 0 && s.posslot == 0;
-        //print(
-        //    "SliceX: ${s.band} ${s.slot} ${s.posband} ${s.posslot} ${s.selected}");
-      }
-      final ss = slices.where((s) => s.selected).toList();
-      if (ss.length > 0) {
-        sel = ss[0];
-      }
-      adjacents.addAll(List<XY>.generate(slots, (index) => XY(1, index)));
-    }
 
-    /*
+      /*
     for (var s in slices) {
       print(
           "SliceX: ${s.band} ${s.slot} ${s.posband} ${s.posslot} ${s.selected}");
     }*/
 
-    for (var v in adjacents) {
-      //print("Adj: ${v.x}:${v.y}");
-      final e =
-          slices.where((s) => s.posband == v.x && s.posslot == v.y).toList();
-      if (e.isEmpty) {
-        //print("Empty!! moving");
-        // move the selcted to this adjacent
-        if (sel != null) {
-          sel.targetband = v.x;
-          sel.targetslot = sel.targetband == 0 ? sel.posslot : v.y;
-          if (sel.posband == 0) sel.posslot = v.y;
-          //print("POS: ${sel.posband} x ${sel.posslot}");
-          //print("TRG: ${sel.targetband} x ${sel.targetslot}");
-          moves++;
+      for (var v in adjacents) {
+        //print("Adj: ${v.x}:${v.y}");
+        final e =
+            slices.where((s) => s.posband == v.x && s.posslot == v.y).toList();
+        if (e.isEmpty) {
+          //print("Empty!! moving");
+          // move the selcted to this adjacent
+          if (sel != null) {
+            sel.targetband = v.x;
+            sel.targetslot = sel.targetband == 0 ? sel.posslot : v.y;
+            if (sel.posband == 0) sel.posslot = v.y;
+            //print("POS: ${sel.posband} x ${sel.posslot}");
+            //print("TRG: ${sel.targetband} x ${sel.targetslot}");
+            moves++;
+          }
         }
       }
-    }
-    if (sel != null) {
-      if (sel.targetband == sel.band && sel.targetslot == sel.slot) {
-        addScore(1);
+      if (sel != null) {
+        if (sel.targetband == sel.band && sel.targetslot == sel.slot) {
+          addScore(1);
+        }
+        controller!.reset();
+        controller!.forward(); // .animateTo(1.0);
       }
-      controller!.reset();
-      controller!.forward(); // .animateTo(1.0);
-    }
 
-    // find the "empty" slot
-    setState(() {});
+      // find the "empty" slot
+      setState(() {});
+      print(
+          "x: ${x.toStringAsFixed(1)} y:${y.toStringAsFixed(1)} r:${r.toStringAsFixed(1)} a:${x.toStringAsFixed(3)} band:$band slot:$slot size:${size.width} dx:${pos.dx.toStringAsFixed(1)} dt:${pos.dy.toStringAsFixed(1)}");
+    } catch (e) {
+      print(e.toString());
+    }
   }
 
   @override
@@ -576,10 +603,11 @@ class _PuzzlePageState extends State<PuzzlePage> with TickerProviderStateMixin {
                           ? 0.7
                           : 1;
 
-          print("$aspect: $sizeFactor");
           final sx = horizOrient
               ? constraints.maxHeight * sizeFactor
               : constraints.maxWidth * sizeFactor;
+
+          //print("$sx");
           if (horizOrient) {
             final size = Size(sx - 20, sx - 20);
             //print("Size: ${size.width}");
@@ -637,140 +665,228 @@ class _PuzzlePageState extends State<PuzzlePage> with TickerProviderStateMixin {
     );
   }
 
-  Padding _gamePanel(Size size, DecorationImage img) {
-    return Padding(
-      padding: const EdgeInsets.all(15.0),
-      child: GestureDetector(
-        onTapDown: (details) {
-          if (playing) {
-            if (paused) {
-              resumePlay();
-            } else if (!controller!.isAnimating) {
-              getSliceFromPosition(details.localPosition, size, slots);
+  Widget _gamePanel(Size size, DecorationImage img) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(15.0),
+        child: GestureDetector(
+          onTapDown: (details) {
+            //print("tap");
+            //print(details.globalPosition.direction);
+            //print(details.globalPosition.dx);
+            //print(details.globalPosition.dy);
+            /*
+            if (playing) {
+              if (paused) {
+                resumePlay();
+              } else if (!controller!.isAnimating) {
+                //print(details.globalPosition.)
+                getSliceFromPosition(details.localPosition, size, slots);
+              }
+            } else {
+              playNow(size);
             }
-          } else {
-            playNow(size);
-          }
-          //setState(() {
-          //slices[15].targetslot++;
-          //});
-          //print(details.localPosition.dx);
-          //print(details.localPosition.dy);
-        },
-        onHorizontalDragUpdate: (details) {
-          //print(details.delta.dx);
-          //print(details.delta.dy);
-          //print(details.localPosition.dx);
-          //print(details.localPosition.dy);
-        },
-        child: AnimatedRotation(
-          turns: turns,
-          duration: const Duration(milliseconds: 1000),
-          onEnd: () {
-            if (toScramble > 0) {
-              setState(() {
-                turns = (turns == 0) ? 4 : 0;
-              });
+            */
+          },
+          onVerticalDragDown: (details) {
+            if (playing) {
+              if (paused) {
+                resumePlay();
+              } else if (!controller!.isAnimating) {
+                //print(details.globalPosition.)
+                getSliceFromPosition(details.localPosition, size, slots);
+              }
+            } else {
+              playNow(size);
             }
           },
-          child: Container(
-            width: size.width,
-            height: size.width,
-            child: CirclePanel(
-              size: size,
-              img: img,
-              opacity: playing ? 0 : 1, //1 - sliceOpacity,
-              children: playing
-                  ? [
-                      ...slices
-                          .map((s) => AnimatedOpacity(
-                                opacity: sliceOpacity,
-                                duration: const Duration(milliseconds: 250),
-                                child: TileSlice(
-                                  r: 0, //r,
-                                  a: s.angle,
-                                  band: s.band,
-                                  slot: s.slot,
-                                  slots: slots,
-                                  bandOffset: s.bandOffset, // 0, //r,
-                                  selected: s.selected,
-                                  img: img,
-                                  size: size,
-                                  bandSize: width,
-                                  posBand: s.posband,
-                                  targetBand: s.targetband,
-                                  progress: s.progress,
-                                ),
-                              ))
-                          .toList(),
-                      ...slices
-                          .map((s) => AnimatedOpacity(
-                                opacity: 1 - sliceOpacity,
-                                duration: const Duration(milliseconds: 250),
-                                child: TileSlice(
-                                  r: 0, //r,
-                                  a: 0, // 2 * pi / 8, //a[0], //a[1], //a[1],
-                                  band: s.band, //s.band,
-                                  slot: s.slot,
-                                  slots: slots,
-                                  bandOffset: 0, //s.bandOffset, //r,
-                                  selected: s.selected,
-                                  img: img,
-                                  size: size,
-                                  bandSize: width,
-                                  posBand: s.band, //s.posband,
-                                  targetBand: s.band, //s.targetband,
-                                  progress: 0, //s.progress,
-                                ),
-                              ))
-                          .toList(),
-                      if (paused)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: const [
-                            Text(
-                              "Paused",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  shadows: [
-                                    Shadow(
-                                      offset: Offset(0, 0),
-                                      blurRadius: 20.0,
-                                      color: Colors.black,
-                                    ),
+          onHorizontalDragDown: (details) {
+            //print("horz");
+            //print(details.globalPosition.direction);
+            //print(details.globalPosition.dx);
+            //print(details.globalPosition.dy);
+          },
+          onHorizontalDragUpdate: (details) {
+            //print(details.delta.dx);
+            //print(details.delta.dy);
+            //print(details.localPosition.dx);
+            //print(details.localPosition.dy);
+          },
+          child: AnimatedRotation(
+            turns: turns,
+            duration: const Duration(milliseconds: 1000),
+            onEnd: () {
+              if (toScramble > 0) {
+                setState(() {
+                  turns = (turns == 0) ? 4 : 0;
+                });
+              }
+            },
+            child: Container(
+              width: size.width,
+              height: size.width,
+              //color: Colors.red,
+              child: CirclePanel(
+                size: size,
+                img: img,
+                opacity: playing ? 0 : 1, //1 - sliceOpacity,
+                children: playing
+                    ? [
+                        ...slices
+                            .map((s) => AnimatedOpacity(
+                                  opacity: sliceOpacity,
+                                  duration: const Duration(milliseconds: 250),
+                                  child: TileSlice(
+                                    r: 0, //r,
+                                    a: s.angle,
+                                    band: s.band,
+                                    slot: s.slot,
+                                    slots: slots,
+                                    bandOffset: s.bandOffset, // 0, //r,
+                                    selected: s.selected,
+                                    img: img,
+                                    size: size,
+                                    bandSize: width,
+                                    posBand: s.posband,
+                                    targetBand: s.targetband,
+                                    progress: s.progress,
+                                  ),
+                                ))
+                            .toList(),
+                        ...slices
+                            .map((s) => AnimatedOpacity(
+                                  opacity: 1 - sliceOpacity,
+                                  duration: const Duration(milliseconds: 250),
+                                  child: TileSlice(
+                                    r: 0, //r,
+                                    a: 0, // 2 * pi / 8, //a[0], //a[1], //a[1],
+                                    band: s.band, //s.band,
+                                    slot: s.slot,
+                                    slots: slots,
+                                    bandOffset: 0, //s.bandOffset, //r,
+                                    selected: s.selected,
+                                    img: img,
+                                    size: size,
+                                    bandSize: width,
+                                    posBand: s.band, //s.posband,
+                                    targetBand: s.band, //s.targetband,
+                                    progress: 0, //s.progress,
+                                  ),
+                                ))
+                            .toList(),
+                        if (paused)
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Text(
+                                "Paused",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    shadows: [
+                                      Shadow(
+                                        offset: Offset(0, 0),
+                                        blurRadius: 20.0,
+                                        color: Colors.black,
+                                      ),
+                                    ],
+                                    color: Colors.white,
+                                    fontSize: 50,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                              Text(
+                                "Tap to resume",
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                    shadows: [
+                                      Shadow(
+                                        offset: Offset(0, 0),
+                                        blurRadius: 20.0,
+                                        color: Colors.black,
+                                      ),
+                                    ],
+                                    color: Colors.white,
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ],
+                          )
+                      ]
+                    : [
+                        !completed
+                            ? Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    if (toScramble == 0)
+                                      const Text(
+                                        "Tap to",
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                            shadows: [
+                                              Shadow(
+                                                offset: Offset(0, 0),
+                                                blurRadius: 20.0,
+                                                color: Colors.black,
+                                              ),
+                                            ],
+                                            color: Colors.white,
+                                            fontSize: 30,
+                                            fontWeight: FontWeight.bold),
+                                      ),
+                                    if (toScramble == 0)
+                                      Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: const [
+                                          Icon(
+                                            Icons.play_circle,
+                                            size: 60,
+                                            color: Colors.white,
+                                          ),
+                                          Text(
+                                            "Play!",
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                                shadows: [
+                                                  Shadow(
+                                                    offset: Offset(0, 0),
+                                                    blurRadius: 20.0,
+                                                    color: Colors.black,
+                                                  ),
+                                                ],
+                                                color: Colors.white,
+                                                fontSize: 70,
+                                                fontWeight: FontWeight.bold),
+                                          ),
+                                        ],
+                                      ),
                                   ],
-                                  color: Colors.white,
-                                  fontSize: 50,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                            Text(
-                              "Tap to resume",
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                  shadows: [
-                                    Shadow(
-                                      offset: Offset(0, 0),
-                                      blurRadius: 20.0,
-                                      color: Colors.black,
+                                ),
+                              )
+                            : Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      "Well Done!",
+                                      textAlign: TextAlign.center,
+                                      style: GoogleFonts.baloo2(
+                                        textStyle: const TextStyle(
+                                            shadows: [
+                                              Shadow(
+                                                offset: Offset(0, 0),
+                                                blurRadius: 20.0,
+                                                color: Colors.black,
+                                              ),
+                                            ],
+                                            color: Colors.white,
+                                            fontSize: 50,
+                                            fontWeight: FontWeight.bold),
+                                      ),
                                     ),
-                                  ],
-                                  color: Colors.white,
-                                  fontSize: 30,
-                                  fontWeight: FontWeight.bold),
-                            ),
-                          ],
-                        )
-                    ]
-                  : [
-                      !completed
-                          ? Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  if (toScramble == 0)
                                     const Text(
-                                      "Tap to",
+                                      "Tap to Play\nthe next level!",
                                       textAlign: TextAlign.center,
                                       style: TextStyle(
                                           shadows: [
@@ -784,76 +900,11 @@ class _PuzzlePageState extends State<PuzzlePage> with TickerProviderStateMixin {
                                           fontSize: 30,
                                           fontWeight: FontWeight.bold),
                                     ),
-                                  if (toScramble == 0)
-                                    Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.center,
-                                      children: const [
-                                        Icon(
-                                          Icons.play_circle,
-                                          size: 60,
-                                          color: Colors.white,
-                                        ),
-                                        Text(
-                                          "Play!",
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                              shadows: [
-                                                Shadow(
-                                                  offset: Offset(0, 0),
-                                                  blurRadius: 20.0,
-                                                  color: Colors.black,
-                                                ),
-                                              ],
-                                              color: Colors.white,
-                                              fontSize: 70,
-                                              fontWeight: FontWeight.bold),
-                                        ),
-                                      ],
-                                    ),
-                                ],
+                                  ],
+                                ),
                               ),
-                            )
-                          : Center(
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Text(
-                                    "Well Done!",
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.baloo2(
-                                      textStyle: const TextStyle(
-                                          shadows: [
-                                            Shadow(
-                                              offset: Offset(0, 0),
-                                              blurRadius: 20.0,
-                                              color: Colors.black,
-                                            ),
-                                          ],
-                                          color: Colors.white,
-                                          fontSize: 50,
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const Text(
-                                    "Tap to Play\nthe next level!",
-                                    textAlign: TextAlign.center,
-                                    style: TextStyle(
-                                        shadows: [
-                                          Shadow(
-                                            offset: Offset(0, 0),
-                                            blurRadius: 20.0,
-                                            color: Colors.black,
-                                          ),
-                                        ],
-                                        color: Colors.white,
-                                        fontSize: 30,
-                                        fontWeight: FontWeight.bold),
-                                  ),
-                                ],
-                              ),
-                            ),
-                    ],
+                      ],
+              ),
             ),
           ),
         ),
